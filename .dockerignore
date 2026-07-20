@@ -1,0 +1,14 @@
+.venv
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache
+.env
+*.log
+.DS_Store
+node_modules
+.vscode
+.idea
+*.md
+models/bge-m3
