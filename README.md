@@ -15,22 +15,22 @@ A FastAPI microservice for document embedding, chunking, and vector storage. Par
 
 ## Tech Stack
 
-| Component       | Technology                          |
-|-----------------|-------------------------------------|
-| Framework       | FastAPI                             |
-| Runtime         | Python 3.11+                        |
-| Embedding Model | BAAI/bge-m3 (sentence-transformers) |
-| Vector Database | Qdrant                              |
-| Object Storage  | MinIO                               |
-| PDF Parsing     | PyMuPDF (fitz)                      |
-| Text Splitting  | LangChain `RecursiveCharacterTextSplitter` |
-| Config          | pydantic-settings + `.env`          |
-| Package Manager | uv                                  |
-| Containerization| Docker / Docker Compose             |
+| Component        | Technology                                |
+|------------------|-------------------------------------------|
+| Framework        | FastAPI                                   |
+| Runtime          | Python 3.12                               |
+| Embedding Model  | BAAI/bge-m3 (sentence-transformers)       |
+| Vector Database  | Qdrant                                    |
+| Object Storage   | MinIO                                     |
+| PDF Parsing      | PyMuPDF (fitz)                            |
+| Text Splitting   | LangChain `RecursiveCharacterTextSplitter`|
+| Config           | pydantic-settings + `.env`                |
+| Package Manager  | uv                                        |
+| Containerization | Docker / Docker Compose                   |
 
 ## Prerequisites
 
-- Python 3.11+ (Python 3.14 recommended per `pyproject.toml`)
+- Python 3.12
 - [uv](https://docs.astral.sh/uv/) — Python package manager
 - Docker and Docker Compose (for containerized run)
 - Access to a Qdrant instance (or run via Docker Compose)
@@ -38,43 +38,41 @@ A FastAPI microservice for document embedding, chunking, and vector storage. Par
 
 ## Installation
 
-### Local Development
+### Local Development (Windows)
 
-```bash
+```powershell
 # Clone the repository
 git clone <repo-url>
-cd embedder_service
+cd embedder-service
 
-# Create and activate virtual environment
-uv venv
-source .venv/bin/activate  # Linux/macOS
-.venv\Scripts\activate     # Windows
-
-# Install dependencies
+# Install dependencies (creates .venv automatically)
 uv sync
+
+# Activate virtual environment
+.venv\Scripts\activate
 ```
 
 ## Environment Variables
 
 Configuration is managed via `.env` file or environment variables. All variables have sensible defaults for local development.
 
-| Variable             | Default                | Description                    |
-|----------------------|------------------------|--------------------------------|
-| `QDRANT_URL`         | `http://localhost:6333`| Qdrant vector DB URL           |
-| `MINIO_ENDPOINT`     | `localhost:9000`       | MinIO server endpoint          |
-| `MINIO_ACCESS_KEY`   | `minioadmin`           | MinIO access key               |
-| `MINIO_SECRET_KEY`   | `minioadmin`           | MinIO secret key               |
-| `MINIO_BUCKET`       | `documents`            | MinIO bucket name              |
-| `BGE_MODEL_PATH`     | `BAAI/bge-m3`          | Sentence-transformers model    |
-| `LOG_LEVEL`          | `INFO`                 | Logging level                  |
+| Variable             | Default                 | Description                    |
+|----------------------|-------------------------|--------------------------------|
+| `QDRANT_URL`         | `http://localhost:6333` | Qdrant vector DB URL           |
+| `MINIO_ENDPOINT`     | `localhost:9000`        | MinIO server endpoint          |
+| `MINIO_ACCESS_KEY`   | `minioadmin`            | MinIO access key               |
+| `MINIO_SECRET_KEY`   | `minioadmin`            | MinIO secret key               |
+| `MINIO_BUCKET`       | `documents`             | MinIO bucket name              |
+| `BGE_MODEL_PATH`     | `BAAI/bge-m3`           | Sentence-transformers model    |
+| `LOG_LEVEL`          | `INFO`                  | Logging level                  |
 
 ## Running the Project
 
-### With Docker Compose 
+### With Docker Compose
 
-```bash
+```powershell
 # Start all services (Qdrant, MinIO, Embedder Service)
-docker compose up --build
+docker-compose up --build
 
 # The service will be available at http://localhost:8001
 # Qdrant at http://localhost:6333
@@ -83,16 +81,22 @@ docker compose up --build
 
 ## API Overview
 
-| Method | Path                | Description                                |
-|--------|---------------------|--------------------------------------------|
-| GET    | `/`                 | Root — returns service info and docs links |
-| GET    | `/api/health`       | Health check (model + Qdrant connectivity) |
-| POST   | `/api/documents/ingest` | Ingest PDF document (fetch → extract → chunk → embed → store) |
-| POST   | `/api/query/embed`  | Embed a query text into a vector           |
+| Method | Path                    | Called By                       | Description                                          |
+|--------|-------------------------|---------------------------------|------------------------------------------------------|
+| GET    | `/`                     | Anyone                          | Root — returns service info and docs links           |
+| GET    | `/api/health`           | Docker, monitoring              | Health check (model + Qdrant connectivity)           |
+| POST   | `/api/documents/ingest` | Spring Boot                     | Ingest PDF document (fetch → extract → chunk → embed → store) |
+| POST   | `/api/query/embed`      | LLM Response Service (Person C) | Embed a query text into a vector                     |
+
+> ⚠️ **Architecture note:** `/api/query/embed` is called by the **LLM Response Service (Person C)**,
+> not by Spring Boot directly. Spring Boot calls Person C's `/api/chat` endpoint,
+> which internally calls this endpoint as part of its pipeline.
 
 Interactive API documentation is available at [http://localhost:8001/docs](http://localhost:8001/docs).
 
 ### POST /api/documents/ingest
+
+**Called by:** Spring Boot when professor clicks "Indexează document"
 
 **Request body:**
 ```json
@@ -106,7 +110,7 @@ Interactive API documentation is available at [http://localhost:8001/docs](http:
 }
 ```
 
-**Response:**
+**Response (success):**
 ```json
 {
   "document_id": 123,
@@ -114,6 +118,17 @@ Interactive API documentation is available at [http://localhost:8001/docs](http:
   "chunks_count": 42,
   "error": null,
   "processing_time_ms": 3500
+}
+```
+
+**Response (failure — always HTTP 200, never 500):**
+```json
+{
+  "document_id": 123,
+  "status": "FAILED",
+  "chunks_count": null,
+  "error": "MinIO fetch error: ...",
+  "processing_time_ms": 150
 }
 ```
 
@@ -127,6 +142,8 @@ The ingestion pipeline:
 7. Upsert all chunks with metadata into Qdrant `course_chunks` collection
 
 ### POST /api/query/embed
+
+**Called by:** LLM Response Service (Person C)
 
 **Request body:**
 ```json
@@ -157,4 +174,8 @@ The ingestion pipeline:
 
 Possible statuses: `"ok"` (both healthy), `"degraded"` (one healthy), `"error"` (none healthy).
 
+## Running Tests
 
+```powershell
+uv run pytest tests/ -v
+```
