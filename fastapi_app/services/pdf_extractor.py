@@ -87,6 +87,10 @@ class PDFExtractor:
                 else:
                     extracted_text += page_text + "\n"
 
+            # Save page_count BEFORE closing the document —
+            # pdf_doc.page_count is not accessible after close()
+            total_pages = pdf_doc.page_count
+
             pdf_doc.close()
 
             # Log which pages were skipped
@@ -109,7 +113,7 @@ class PDFExtractor:
                 "Text extracted successfully",
                 extra={"extra_data": {
                     "path_minio": path_minio,
-                    "pages": pdf_doc.page_count,
+                    "pages": total_pages,
                     "chars": len(extracted_text)
                 }}
             )
