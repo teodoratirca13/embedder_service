@@ -1,5 +1,6 @@
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi_app.auth import verify_credentials
 
 from fastapi_app.models import IngestRequest, IngestResponse
 from fastapi_app.services import (
@@ -11,7 +12,8 @@ from fastapi_app.services import (
 from fastapi_app.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-router = APIRouter(prefix="/api", tags=["documents"])
+router = APIRouter(prefix="/api", tags=["documents"],
+                   dependencies=[Depends(verify_credentials)])
 
 
 @router.post("/documents/ingest", response_model=IngestResponse)
