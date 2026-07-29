@@ -40,7 +40,9 @@ services:
       - rag_network
 
   embedder-service:
-    build: .
+    build:
+        context: .
+        dockerfile: Dockerfile.multistage
     container_name: embedder-service
     ports:
       - "8001:8001"
@@ -61,7 +63,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 120s
     networks:
       - rag_network
 
