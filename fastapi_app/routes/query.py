@@ -1,13 +1,17 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from fastapi_app.auth import verify_credentials
 from fastapi_app.models import EmbedRequest, EmbedResponse
 from fastapi_app.services import get_embedding_model
 from fastapi_app.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-router = APIRouter(prefix="/api", tags=["query"])
-
+router = APIRouter(
+    prefix="/api",
+    tags=["query"],
+    dependencies=[Depends(verify_credentials)]
+)
 
 @router.post("/query/embed", response_model=EmbedResponse)
 def embed_query(request: EmbedRequest) -> EmbedResponse:

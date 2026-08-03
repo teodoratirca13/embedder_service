@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
-
+        extra = "ignore"  #pentru RAG_SERVICE_USERNAME si RAG_SERVICE_PASSWORD
 
 @lru_cache() #pentru a nu executa functia de fiecare data
 def get_settings() -> Settings:

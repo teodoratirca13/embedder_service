@@ -53,6 +53,8 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - BGE_MODEL_PATH=BAAI/bge-m3
       - LOG_LEVEL=INFO
+      - RAG_SERVICE_USERNAME=${RAG_SERVICE_USERNAME}
+      - RAG_SERVICE_PASSWORD=${RAG_SERVICE_PASSWORD}
     depends_on:
       - qdrant
       - minio
