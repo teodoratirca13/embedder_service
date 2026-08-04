@@ -2,6 +2,7 @@ import logging
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict
+from fastapi_app.utils.logging_ctx import request_id_var
 
 
 class JsonFormatter(logging.Formatter):
@@ -11,6 +12,7 @@ class JsonFormatter(logging.Formatter):
         log_data: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "service": "embedder",
+            "request_id": request_id_var.get(),
             "level": record.levelname,
             "message": record.getMessage(),
             "logger": record.name,

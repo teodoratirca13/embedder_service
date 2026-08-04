@@ -7,6 +7,8 @@ from fastapi_app.routes import health_router, documents_router, query_router
 from fastapi_app.utils.logger import setup_logger
 from fastapi_app.utils.config import get_settings
 
+from fastapi_app.middleware import request_context
+
 logger = setup_logger(__name__)
 
 
@@ -87,6 +89,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.middleware("http")(request_context)
 
 # ============================================================================
 # REGISTER ROUTERS
