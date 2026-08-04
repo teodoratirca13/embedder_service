@@ -100,3 +100,22 @@ class HealthResponse(BaseModel):
                 "qdrant_connected": True
             }
         }
+
+# ============================================================================
+# DELETE ENDPOINT (DELETE /api/documents/{document_id})
+# ============================================================================
+
+class DeleteResponse(BaseModel):
+    """Response body from document chunk deletion."""
+    document_id: int
+    status: str  # "SUCCESS" or "FAILED"
+    error: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "document_id": 123,
+                "status": "SUCCESS",
+                "error": None
+            }
+        }

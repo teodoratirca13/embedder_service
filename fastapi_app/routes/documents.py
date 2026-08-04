@@ -1,20 +1,8 @@
 import time
-from fastapi import APIRouter, HTTPException
-
-from fastapi_app.models import IngestRequest, IngestResponse
-from fastapi_app.services import (
-    get_pdf_extractor,
-    get_text_chunker,
-    get_embedding_model,
-    get_qdrant_client
-)
-from fastapi_app.utils.logger import setup_logger
-
-import time
 from fastapi import APIRouter, HTTPException, Depends
 
 from fastapi_app.auth import verify_credentials
-from fastapi_app.models import IngestRequest, IngestResponse
+from fastapi_app.models import IngestRequest, IngestResponse, DeleteResponse
 from fastapi_app.services import (
     get_pdf_extractor,
     get_text_chunker,
@@ -186,4 +174,45 @@ def ingest_document(request: IngestRequest) -> IngestResponse:
             status="FAILED",
             error=error_msg,
             processing_time_ms=processing_time_ms
+        )
+
+@router.delete("/documents/{document_id}", response_model=DeleteResponse)
+def delete_document(document_id: int) -> DeleteResponse:
+    """
+    Delete all Qdrant chunks for a document.
+
+    Called by Spring Boot when a document is deleted (or before re-indexing
+    outside the normal ingest flow). Idempotent — succeeds even if the
+    document was never indexed.
+    """
+    logger.info(
+        "Delete request received",
+        extra={"extra_data": {"document_id": document_id}}
+    )
+
+    try:
+        qdrant_client = get_qdrant_client()
+        qdrant_client.delete_document_chunks(document_id)
+
+        logger.info(
+            "Document chunks deleted",
+            extra={"extra_data": {"document_id": document_id}}
+        )
+
+        return DeleteResponse(
+            document_id=document_id,
+            status="SUCCESS"
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(
+            "Delete failed",
+            extra={"extra_data": {"document_id": document_id, "error": error_msg}}
+        )
+
+        return DeleteResponse(
+            document_id=document_id,
+            status="FAILED",
+            error=error_msg
         )
