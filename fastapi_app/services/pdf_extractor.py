@@ -2,6 +2,7 @@ import io
 from minio import Minio
 from minio.error import S3Error
 import fitz  # PyMuPDF
+from rapidfuzz import fuzz
 
 from fastapi_app.utils import setup_logger
 from fastapi_app.utils import get_settings
@@ -22,6 +23,124 @@ class PDFExtractor:
             secure=False  # pentru productia este True ca sa fie HTTPS
         )
         self.bucket_name = settings.minio_bucket
+
+    def _collect_header_footer_candidates(self, doc, header_ratio: float = 0.10, footer_ratio: float = 0.10) -> list[
+        str]:
+        """Aduna textele blocurilor din zona de header/footer, de pe toate paginile."""
+        candidates = []
+
+        for page_num in range(doc.page_count):
+            page = doc[page_num]
+            page_height = page.rect.height
+            header_limit = page_height * header_ratio
+            footer_limit = page_height * (1 - footer_ratio)
+
+            page_dict = page.get_text("dict")
+
+            for block in page_dict["blocks"]:
+                if "lines" not in block:
+                    continue
+
+                y0 = block["bbox"][1]
+                if y0 < header_limit or y0 > footer_limit:
+                    block_text = "".join(
+                        span["text"] for line in block["lines"] for span in line["spans"]
+                    ).strip()
+                    if block_text:
+                        candidates.append(block_text)
+
+        return candidates
+
+    def _get_confirmed_header_footer_texts(
+            self, doc,
+            header_ratio: float = 0.10,
+            footer_ratio: float = 0.10,
+            similarity_threshold: int = 90,
+            frequency_threshold: float = 0.5
+    ) -> list[str]:
+        """Grupeaza candidatii similari si intoarce textele care se repeta suficient de des."""
+        candidates = self._collect_header_footer_candidates(doc, header_ratio, footer_ratio)
+
+        clusters = []
+        for text in candidates:
+            matched = False
+            for cluster in clusters:
+                if fuzz.ratio(text, cluster["representative"]) >= similarity_threshold:
+                    cluster["count"] += 1
+                    matched = True
+                    break
+            if not matched:
+                clusters.append({"representative": text, "count": 1})
+
+        min_occurrences = doc.page_count * frequency_threshold
+        return [c["representative"] for c in clusters if c["count"] >= min_occurrences]
+
+    def _extract_page_text_deduped(
+            self, page, confirmed_texts: list[str], already_included: set,
+            header_ratio: float = 0.10, footer_ratio: float = 0.10, similarity_threshold: int = 90
+    ) -> str:
+        """Extrage textul unei pagini, pastrand fiecare header/footer confirmat o singura data."""
+        page_height = page.rect.height
+        header_limit = page_height * header_ratio
+        footer_limit = page_height * (1 - footer_ratio)
+
+        page_dict = page.get_text("dict")
+        page_lines = []
+
+        for block in page_dict["blocks"]:
+            if "lines" not in block:
+                continue
+
+            block_text = "".join(
+                span["text"] for line in block["lines"] for span in line["spans"]
+            ).strip()
+            if not block_text:
+                continue
+
+            y0 = block["bbox"][1]
+            is_in_zone = y0 < header_limit or y0 > footer_limit
+
+            if is_in_zone:
+                matched = next(
+                    (ct for ct in confirmed_texts if fuzz.ratio(block_text, ct) >= similarity_threshold),
+                    None
+                )
+                if matched is not None:
+                    if matched in already_included:
+                        continue
+                    already_included.add(matched)
+                    page_lines.append(block_text)
+                    continue
+
+            page_lines.append(block_text)
+
+        return "\n".join(page_lines)
+
+    def _extract_page_text(self, page, header_ratio=0.10, footer_ratio=0.10):
+
+        page_height = page.rect.height
+        header_limit = page_height * header_ratio
+        footer_limit = page_height * (1 - footer_ratio)
+
+        page_dict = page.get_text("dict")
+        kept_lines = []
+
+        for block in page_dict["blocks"]:
+            if "lines" not in block:
+                continue
+
+            y0 = block["bbox"][1]
+
+            if y0 < header_limit or y0 > footer_limit:
+                continue
+
+            for line in block["lines"]:
+                line_text = ""
+                for span in line["spans"]:
+                    line_text = line_text + span["text"]
+                kept_lines.append(line_text)
+        return "\n".join(kept_lines)
+
 
     def extract_text(self, path_minio: str) -> str:
         """
@@ -70,21 +189,21 @@ class PDFExtractor:
             extracted_text = ""
             image_only_pages = []
 
+            confirmed_texts = self._get_confirmed_header_footer_texts(pdf_doc)
+            already_included = set()
+
             for page_num in range(pdf_doc.page_count):
                 page = pdf_doc[page_num]
-                page_text = page.get_text()
+                raw_page_text = page.get_text()  # neschimbat, pentru verificarea "pagina doar-imagine"
 
-                # Check if page is mostly empty (image-only)
-                if len(page_text.strip()) < 50:
-                    image_only_pages.append(page_num + 1)  # 1-indexed for humans
+                if len(raw_page_text.strip()) < 50:
+                    image_only_pages.append(page_num + 1)
                     logger.warning(
                         "Skipping image-only page",
-                        extra={"extra_data": {
-                            "path_minio": path_minio,
-                            "page": page_num + 1
-                        }}
+                        extra={"extra_data": {"path_minio": path_minio, "page": page_num + 1}}
                     )
                 else:
+                    page_text = self._extract_page_text_deduped(page, confirmed_texts, already_included)
                     extracted_text += page_text + "\n"
 
             # Save page_count BEFORE closing the document —

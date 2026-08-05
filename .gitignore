@@ -218,3 +218,6 @@ __marimo__/
 
 # Model files
 models/
+
+# Scratch
+scratch/
