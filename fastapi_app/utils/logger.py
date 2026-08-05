@@ -2,6 +2,9 @@ import logging
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict
+
+from opentelemetry import trace                      # ← nou
+
 from fastapi_app.utils.logging_ctx import request_id_var
 
 _STD = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
@@ -20,6 +23,12 @@ class JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "logger": record.name,
         }
+
+        # Trace context OTel, format W3C — identic cu ce scoate agentul Java.  ← nou
+        ctx = trace.get_current_span().get_span_context()
+        if ctx.is_valid:
+            log_data["trace_id"] = format(ctx.trace_id, "032x")
+            log_data["span_id"] = format(ctx.span_id, "016x")
 
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
