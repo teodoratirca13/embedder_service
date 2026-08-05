@@ -4,17 +4,20 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 from fastapi_app.utils.logging_ctx import request_id_var
 
+_STD = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
+    "message", "asctime", "taskName", "extra_data",
+}
 
 class JsonFormatter(logging.Formatter):
     """Format logs as JSON."""
 
     def format(self, record: logging.LogRecord) -> str:
         log_data: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now().astimezone().isoformat(timespec="milliseconds"),
             "service": "embedder",
             "request_id": request_id_var.get(),
             "level": record.levelname,
-            "message": record.getMessage(),
+            "msg": record.getMessage(),
             "logger": record.name,
         }
 
@@ -24,8 +27,11 @@ class JsonFormatter(logging.Formatter):
         if hasattr(record, "extra_data"):
             log_data.update(record.extra_data)
 
-        return json.dumps(log_data)
+        for key, value in record.__dict__.items():
+            if key not in _STD and key not in log_data:
+                log_data[key] = value
 
+        return json.dumps(log_data, ensure_ascii=False, default=str)
 
 def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
     """Create a logger with JSON formatting."""
