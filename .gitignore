@@ -221,3 +221,7 @@ models/
 
 # Scratch
 scratch/
+
+check_qdrant.py
+mock_springboot.py
+TEST_SUITE_CHANGES.md

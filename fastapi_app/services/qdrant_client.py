@@ -9,6 +9,7 @@ from qdrant_client.models import (
     FieldCondition,
     MatchValue
 )
+from typing import Optional
 
 from fastapi_app.utils import setup_logger
 from fastapi_app.utils import get_settings
@@ -80,9 +81,9 @@ class QdrantVectorStore:
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def _generate_point_id(self, document_id: int, chunk_index: int) -> str:  # pentru a nu exista puncte duplicate
+    def _generate_point_id(self, document_id: int, source_type: str, chunk_index: int) -> str:  # pentru a nu exista puncte duplicate
 
-        namespace_str = f"{document_id}_{chunk_index}"
+        namespace_str = f"{document_id}_{source_type}_{chunk_index}"
         return str(uuid.uuid5(uuid.NAMESPACE_OID, namespace_str))
 
     def delete_document_chunks(self, document_id: int):
@@ -124,62 +125,64 @@ class QdrantVectorStore:
             document_title: str,
             professor_id: int,
             chunks: list[str],
-            embeddings: list[list[float]]
+            embeddings: list[list[float]],
+            source_type: str = "text",
+            page_numbers: Optional[list[int]] = None
     ):
         """
         Store document chunks and their embeddings in Qdrant.
 
         Args:
-            document_id: PostgreSQL documente.id
-            course_id: PostgreSQL cursuri.id
-            week_id: PostgreSQL saptamani.id (security filter field)
-            document_title: Display name for the document
-            professor_id: PostgreSQL app_user.id
-            chunks: List of text chunks
-            embeddings: List of 1024-dim embedding vectors (one per chunk)
+            ...(neschimbat)...
+            source_type: "text" (implicit) sau "image" — distinge sursa chunk-ului
+            page_numbers: lista de numere de pagina, aliniata index-cu-index cu
+                chunks (doar pentru source_type="image"); None pentru text
         """
         logger.info(
             "Upserting chunks to Qdrant",
             extra={"extra_data": {
                 "document_id": document_id,
                 "course_id": course_id,
-                "chunk_count": len(chunks)
+                "chunk_count": len(chunks),
+                "source_type": source_type
             }}
         )
 
         if len(chunks) != len(embeddings):
             raise ValueError(f"Chunk count ({len(chunks)}) != embedding count ({len(embeddings)})")
 
+        if page_numbers is not None and len(page_numbers) != len(chunks):
+            raise ValueError(f"page_numbers count ({len(page_numbers)}) != chunks count ({len(chunks)})")
+
         try:
             points = []
 
             for chunk_index, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
-                point_id = self._generate_point_id(document_id, chunk_index)
+                point_id = self._generate_point_id(document_id, source_type, chunk_index)
 
-                point = PointStruct(
-                    id=point_id,
-                    vector=embedding,
-                    payload={
-                        "chunk_text": chunk_text,
-                        "chunk_index": chunk_index,
-                        "total_chunks": len(chunks),
-                        "document_id": document_id,
-                        "course_id": course_id,
-                        "week_id": week_id,
-                        "document_title": document_title,
-                        "professor_id": professor_id
-                    }
-                )
+                payload = {
+                    "chunk_text": chunk_text,
+                    "chunk_index": chunk_index,
+                    "total_chunks": len(chunks),
+                    "document_id": document_id,
+                    "course_id": course_id,
+                    "week_id": week_id,
+                    "document_title": document_title,
+                    "professor_id": professor_id,
+                    "source_type": source_type
+                }
+
+                if page_numbers is not None:
+                    payload["page_number"] = page_numbers[chunk_index]
+
+                point = PointStruct(id=point_id, vector=embedding, payload=payload)
                 points.append(point)
 
-            # Upsert in batches of 64 to avoid memory spikes
+            # restul metodei ramane neschimbat (batch upsert, logging)
             batch_size = 64
             for i in range(0, len(points), batch_size):
                 batch = points[i:i + batch_size]
-                self.client.upsert(
-                    collection_name=COLLECTION_NAME,
-                    points=batch
-                )
+                self.client.upsert(collection_name=COLLECTION_NAME, points=batch)
                 logger.debug(
                     "Upserted batch",
                     extra={"extra_data": {
@@ -193,7 +196,8 @@ class QdrantVectorStore:
                 "Chunks upserted successfully",
                 extra={"extra_data": {
                     "document_id": document_id,
-                    "total_points": len(points)
+                    "total_points": len(points),
+                    "source_type": source_type
                 }}
             )
 

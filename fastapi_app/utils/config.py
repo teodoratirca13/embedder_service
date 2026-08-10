@@ -19,6 +19,20 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Gemini Vision (image captioning)
+    gemini_api_key: str = ""
+    gemini_vision_model: str = "gemini-1.5-flash"
+    gemini_request_delay_seconds: float = 13.0
+
+    min_image_width: int = 100
+    min_image_height: int = 100
+    max_images_per_document: int = 20
+
+    # Spring Boot callback (async image job status)
+    spring_boot_callback_url: str = ""
+    spring_boot_callback_username: str = ""
+    spring_boot_callback_password: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = False

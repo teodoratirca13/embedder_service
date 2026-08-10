@@ -33,8 +33,9 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     """Response body from document ingestion."""
     document_id: int
-    status: str  # "INDEXED" or "FAILED"
+    status: str  # "INDEXED" or "FAILED" or "INDEXED_TEXT_ONLY"
     chunks_count: Optional[int] = None
+    images_queued: Optional[int] = None
     error: Optional[str] = None
     processing_time_ms: int
 
@@ -42,8 +43,9 @@ class IngestResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "document_id": 123,
-                "status": "INDEXED",
+                "status": "INDEXED_TEXT_ONLY",
                 "chunks_count": 42,
+                "images_queued": 5,
                 "error": None,
                 "processing_time_ms": 3500
             }

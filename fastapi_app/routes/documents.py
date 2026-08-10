@@ -1,5 +1,6 @@
 import time
-from fastapi import APIRouter, HTTPException, Depends
+import uuid
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 
 from fastapi_app.auth import verify_credentials
 from fastapi_app.models import IngestRequest, IngestResponse, DeleteResponse
@@ -7,7 +8,9 @@ from fastapi_app.services import (
     get_pdf_extractor,
     get_text_chunker,
     get_embedding_model,
-    get_qdrant_client
+    get_qdrant_client,
+    process_images_background,
+    register_ingest_version
 )
 from fastapi_app.utils.logger import setup_logger
 
@@ -20,18 +23,25 @@ router = APIRouter(
 
 
 @router.post("/documents/ingest", response_model=IngestResponse)
-def ingest_document(request: IngestRequest) -> IngestResponse:
+def ingest_document(request: IngestRequest, background_tasks: BackgroundTasks) -> IngestResponse:
     """
     Ingest a document: fetch PDF → extract → chunk → embed → store in Qdrant.
 
     Called by Spring Boot when professor clicks "Indexează document".
     Spring Boot waits synchronously for this response.
 
+    Partea de text (Step 1-5) e sincrona — Spring Boot primeste raspunsul
+    imediat dupa ce textul e salvat in Qdrant. Imaginile din PDF sunt
+    procesate separat, in fundal (BackgroundTasks), ca sa nu riste sa
+    depaseasca timeout-ul de ingest. La final, embedder-ul notifica Spring
+    Boot printr-un apel separat (springboot_callback.py).
+
     Args:
         request: IngestRequest with document metadata and MinIO path
+        background_tasks: injectat automat de FastAPI
 
     Returns:
-        IngestResponse with status ("INDEXED" or "FAILED") and chunk count
+        IngestResponse with status ("INDEXED_TEXT_ONLY" or "FAILED") and chunk count
     """
     start_time = time.time()
     document_id = request.document_id
@@ -134,14 +144,28 @@ def ingest_document(request: IngestRequest) -> IngestResponse:
 
         logger.info("Step 5 complete: Chunks stored in Qdrant", extra={"extra_data": {"document_id": document_id}})
 
-        # ===== SUCCESS =====
+        # ===== STEP 6: Programeaza procesarea imaginilor, in fundal =====
+        # Genereaza un "bilet" unic pentru aceasta rulare — daca profesorul
+        # reindexeaza documentul inainte ca job-ul de imagini sa se termine,
+        # image_pipeline.py va detecta ca acest bilet nu mai e cel curent si
+        # va renunta liniștit la rezultat (vezi sectiunea 6 din plan).
+        ingest_version = str(uuid.uuid4())
+        register_ingest_version(document_id, ingest_version)
+        background_tasks.add_task(process_images_background, request, ingest_version)
+
+        logger.info(
+            "Step 6 complete: Image processing scheduled in background",
+            extra={"extra_data": {"document_id": document_id, "ingest_version": ingest_version}}
+        )
+
+        # ===== SUCCESS (text) =====
         processing_time_ms = int((time.time() - start_time) * 1000)
 
         logger.info(
-            "Ingest complete: SUCCESS",
+            "Ingest complete: TEXT INDEXED, images queued",
             extra={"extra_data": {
                 "document_id": document_id,
-                "status": "INDEXED",
+                "status": "INDEXED_TEXT_ONLY",
                 "chunk_count": len(chunks),
                 "processing_time_ms": processing_time_ms
             }}
@@ -149,8 +173,9 @@ def ingest_document(request: IngestRequest) -> IngestResponse:
 
         return IngestResponse(
             document_id=document_id,
-            status="INDEXED",
+            status="INDEXED_TEXT_ONLY",
             chunks_count=len(chunks),
+            images_queued=None,  # numarul exact se afla doar dupa extragere, in job-ul de fundal
             processing_time_ms=processing_time_ms
         )
 
