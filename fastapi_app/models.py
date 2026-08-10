@@ -29,7 +29,6 @@ class IngestRequest(BaseModel):
             }
         }
 
-
 class IngestResponse(BaseModel):
     """Response body from document ingestion."""
     document_id: int
@@ -104,7 +103,7 @@ class HealthResponse(BaseModel):
         }
 
 # ============================================================================
-# DELETE ENDPOINT (DELETE /api/documents/{document_id})
+# DELETE ENDPOINT (DELETE /api/documents/ingest/{document_id})
 # ============================================================================
 
 class DeleteResponse(BaseModel):

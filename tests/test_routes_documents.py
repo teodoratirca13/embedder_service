@@ -1,5 +1,5 @@
 """
-Unit tests for POST /api/documents/ingest and DELETE /api/documents/{id}.
+Unit tests for POST /api/documents/ingest and DELETE /api/documents/ingest/{id}.
 
 Auth is bypassed via dependency_overrides. All services used by the route
 (pdf extractor, chunker, embedder, Qdrant client, background image
@@ -177,7 +177,7 @@ class TestDeleteDocument:
         qdrant = MagicMock()
         monkeypatch.setattr(documents_route, "get_qdrant_client", lambda: qdrant)
 
-        resp = client.delete("/api/documents/123")
+        resp = client.delete("/api/documents/ingest/123")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -189,7 +189,7 @@ class TestDeleteDocument:
         qdrant.delete_document_chunks.side_effect = RuntimeError("Qdrant unreachable")
         monkeypatch.setattr(documents_route, "get_qdrant_client", lambda: qdrant)
 
-        resp = client.delete("/api/documents/123")
+        resp = client.delete("/api/documents/ingest/123")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -202,16 +202,16 @@ class TestDeleteDocument:
         qdrant = MagicMock()
         monkeypatch.setattr(documents_route, "get_qdrant_client", lambda: qdrant)
 
-        resp = client.delete("/api/documents/999999")
+        resp = client.delete("/api/documents/ingest/999999")
 
         assert resp.status_code == 200
         assert resp.json()["status"] == "SUCCESS"
 
     def test_delete_non_integer_id_returns_422(self, client):
-        resp = client.delete("/api/documents/not-an-int")
+        resp = client.delete("/api/documents/ingest/not-an-int")
         assert resp.status_code == 422
 
     def test_delete_requires_auth_when_not_overridden(self):
         real_client = TestClient(app)
-        resp = real_client.delete("/api/documents/123")
+        resp = real_client.delete("/api/documents/ingest/123")
         assert resp.status_code == 401

@@ -190,7 +190,7 @@ class TestConfig:
         assert settings.minio_bucket == "documents"
         assert settings.bge_model_path == "BAAI/bge-m3"
         assert settings.log_level == "INFO"
-        assert settings.gemini_vision_model == "gemini-1.5-flash"
+        assert settings.gemini_vision_model == "gemini-3.1-flash-lite"
         assert settings.gemini_request_delay_seconds == 13.0
         assert settings.min_image_width == 100
         assert settings.min_image_height == 100

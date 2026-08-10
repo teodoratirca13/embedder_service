@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from opentelemetry import trace                      # ← nou
+from opentelemetry import trace         # ← nou
 
 from fastapi_app.utils.logging_ctx import request_id_var
 

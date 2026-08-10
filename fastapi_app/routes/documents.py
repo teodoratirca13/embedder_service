@@ -201,14 +201,17 @@ def ingest_document(request: IngestRequest, background_tasks: BackgroundTasks) -
             processing_time_ms=processing_time_ms
         )
 
-@router.delete("/documents/{document_id}", response_model=DeleteResponse)
+@router.delete("/documents/ingest/{document_id}", response_model=DeleteResponse)
 def delete_document(document_id: int) -> DeleteResponse:
     """
     Delete all Qdrant chunks for a document.
 
-    Called by Spring Boot when a document is deleted (or before re-indexing
-    outside the normal ingest flow). Idempotent — succeeds even if the
-    document was never indexed.
+    Called by Spring Boot (RagIngestService.stergeDinIngest) when a document
+    is deleted, or before re-indexing outside the normal ingest flow.
+    Idempotent — succeeds even if the document was never indexed.
+
+    Path-ul e /documents/ingest/{id} (nu /documents/{id}) ca sa corespunda
+    exact cu ce apeleaza backend-ul Spring Boot — vezi RagIngestService.java.
     """
     logger.info(
         "Delete request received",

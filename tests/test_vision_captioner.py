@@ -14,24 +14,24 @@ class TestInit:
 
     def test_missing_api_key_raises_runtime_error(self):
         with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
-            VisionCaptioner(api_key="", model="gemini-1.5-flash")
+            VisionCaptioner(api_key="", model="gemini-3.1-flash-lite")
 
     def test_client_init_failure_raises_runtime_error(self):
         with patch("fastapi_app.services.vision_captioner.genai.Client", side_effect=Exception("bad key")):
             with pytest.raises(RuntimeError, match="Failed to initialize Gemini client"):
-                VisionCaptioner(api_key="fake-key", model="gemini-1.5-flash")
+                VisionCaptioner(api_key="fake-key", model="gemini-3.1-flash-lite")
 
     def test_valid_api_key_constructs_client(self):
         with patch("fastapi_app.services.vision_captioner.genai.Client") as mock_client_cls:
-            captioner = VisionCaptioner(api_key="fake-key", model="gemini-1.5-flash")
+            captioner = VisionCaptioner(api_key="fake-key", model="gemini-3.1-flash-lite")
             mock_client_cls.assert_called_once_with(api_key="fake-key")
-            assert captioner.model == "gemini-1.5-flash"
+            assert captioner.model == "gemini-3.1-flash-lite"
 
 
 @pytest.fixture
 def captioner():
     with patch("fastapi_app.services.vision_captioner.genai.Client"):
-        return VisionCaptioner(api_key="fake-key", model="gemini-1.5-flash")
+        return VisionCaptioner(api_key="fake-key", model="gemini-3.1-flash-lite")
 
 
 class TestCaptionImage:
@@ -53,7 +53,7 @@ class TestCaptionImage:
         captioner.caption_image(b"raw-bytes", mime_type="image/jpeg")
 
         _, kwargs = captioner.client.models.generate_content.call_args
-        assert kwargs["model"] == "gemini-1.5-flash"
+        assert kwargs["model"] == "gemini-3.1-flash-lite"
 
     def test_empty_response_text_returns_none(self, captioner):
         response = MagicMock()

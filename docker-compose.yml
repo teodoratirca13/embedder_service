@@ -39,22 +39,43 @@ services:
     networks:
       - rag_network
 
-  embedder-service:
+  # Numele serviciului/containerului este "embedder" (nu "embedder-service")
+  # pentru ca backend-ul Spring Boot il gaseste implicit la http://embedder:8001
+  # (vezi app.rag.embedder-url / RAG_EMBEDDER_URL in akadion/backend).
+  #
+  # Reteaua "akadion_shared" e externa si trebuie sa existe inainte de
+  # "docker-compose up" — launcherul din akadion (Start Akadion.cmd) o
+  # creeaza automat; daca pornesti embedder-ul separat, ruleaza intai:
+  #   docker network create akadion_shared
+  # Vezi README > "Rulare integrata cu akadion" pentru valorile .env
+  # (MINIO_ENDPOINT, MINIO_BUCKET, RAG_SERVICE_USERNAME/PASSWORD) necesare
+  # ca backend-ul sa poata efectiv sa vorbeasca cu acest serviciu.
+  embedder:
     build:
         context: .
         dockerfile: Dockerfile.multistage
-    container_name: embedder-service
+    container_name: embedder
     ports:
       - "8001:8001"
     environment:
-      - QDRANT_URL=http://qdrant:6333
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - BGE_MODEL_PATH=BAAI/bge-m3
-      - LOG_LEVEL=INFO
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-documents}
+      - BGE_MODEL_PATH=${BGE_MODEL_PATH:-BAAI/bge-m3}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RAG_SERVICE_USERNAME=${RAG_SERVICE_USERNAME}
       - RAG_SERVICE_PASSWORD=${RAG_SERVICE_PASSWORD}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_VISION_MODEL=${GEMINI_VISION_MODEL:-gemini-3.1-flash-lite}
+      - GEMINI_REQUEST_DELAY_SECONDS=${GEMINI_REQUEST_DELAY_SECONDS:-13.0}
+      - MIN_IMAGE_WIDTH=${MIN_IMAGE_WIDTH:-100}
+      - MIN_IMAGE_HEIGHT=${MIN_IMAGE_HEIGHT:-100}
+      - MAX_IMAGES_PER_DOCUMENT=${MAX_IMAGES_PER_DOCUMENT:-20}
+      - SPRING_BOOT_CALLBACK_URL=${SPRING_BOOT_CALLBACK_URL}
+      - SPRING_BOOT_CALLBACK_USERNAME=${SPRING_BOOT_CALLBACK_USERNAME}
+      - SPRING_BOOT_CALLBACK_PASSWORD=${SPRING_BOOT_CALLBACK_PASSWORD}
     depends_on:
       - qdrant
       - minio
@@ -68,6 +89,7 @@ services:
       start_period: 120s
     networks:
       - rag_network
+      - akadion_shared
 
 volumes:
   qdrant_data:
@@ -76,4 +98,6 @@ volumes:
 
 networks:
   rag_network:
+    external: true
+  akadion_shared:
     external: true

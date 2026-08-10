@@ -95,7 +95,7 @@ class ImageExtractor:
 
         try:
             response = self.minio_client.get_object(bucket_name=self.bucket_name, object_name=path_minio) #se aduce un stream cu pdf ul
-            pdf_bytes = response.read()#se descarca in memorie (se citeste streamul)
+            pdf_bytes = response.read() #se descarca in memorie (se citeste streamul)
         except S3Error as e:
             error_msg = f"MinIO fetch error: {str(e)}"
             logger.error(error_msg, extra={"extra_data": {"path_minio": path_minio}})

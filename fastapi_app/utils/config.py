@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Gemini Vision (image captioning)
     gemini_api_key: str = ""
-    gemini_vision_model: str = "gemini-1.5-flash"
+    gemini_vision_model: str = "gemini-3.1-flash-lite"
     gemini_request_delay_seconds: float = 13.0
 
     min_image_width: int = 100
