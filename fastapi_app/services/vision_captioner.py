@@ -7,12 +7,12 @@ from fastapi_app.utils import get_settings, setup_logger
 logger = setup_logger(__name__)
 
 CAPTION_PROMPT = (
-    "Descrie pe scurt, in limba romana, ce se vede in aceasta imagine extrasa "
-    "dintr-un material de curs universitar (poate fi o diagrama, un grafic, o "
-    "schema, o poza sau un tabel). Concentreaza-te pe informatia utila pentru "
-    "un student care ar cauta acest continut printr-o intrebare text catre un "
-    "chatbot. Raspunde doar cu descrierea, fara introduceri de tipul "
-    "\"in aceasta imagine\"."
+    "Briefly describe, in English, what is shown in this image extracted "
+    "from university course material (it could be a diagram, a chart, a "
+    "schema, a photo, or a table). Focus on information useful to a student "
+    "who would search for this content through a text question to a "
+    "chatbot. Reply with only the description, without introductions like "
+    "\"this image shows\"."
 )
 
 
