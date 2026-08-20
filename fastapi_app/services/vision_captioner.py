@@ -9,10 +9,15 @@ logger = setup_logger(__name__)
 CAPTION_PROMPT = (
     "Briefly describe, in English, what is shown in this image extracted "
     "from university course material (it could be a diagram, a chart, a "
-    "schema, a photo, or a table). Focus on information useful to a student "
-    "who would search for this content through a text question to a "
-    "chatbot. Reply with only the description, without introductions like "
-    "\"this image shows\"."
+    "schema, a photo, or a table). "
+    "If the image contains a terminal/console screenshot, a code snippet, "
+    "or a list of names/values (such as file paths, package or library "
+    "names, variable names, or configuration keys), transcribe the exact "
+    "visible text — commands, names, and outputs — verbatim, not just a "
+    "general summary of what it shows. "
+    "Focus on information useful to a student who would search for this "
+    "content through a text question to a chatbot. Reply with only the "
+    "description, without introductions like \"this image shows\"."
 )
 
 
