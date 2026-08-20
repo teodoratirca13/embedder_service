@@ -48,7 +48,7 @@ A FastAPI microservice for document embedding, chunking, and vector storage. Par
 ```powershell
 # Clone the repository
 git clone <repo-url>
-cd embedder-service
+cd embedder_service
 
 # Install dependencies (creates .venv automatically)
 uv sync
@@ -84,7 +84,7 @@ Configuration is managed via `.env` file or environment variables. All variables
 
 > ⚠️ If `RAG_SERVICE_USERNAME` / `RAG_SERVICE_PASSWORD` are not set, any request to a protected endpoint returns **HTTP 500** ("Autentificarea nu este configurată pe server"), not a silent bypass.
 >
-> ⚠️ `SPRING_BOOT_CALLBACK_URL` currently has **no matching endpoint on the Spring Boot side yet** — the async image callback (`PATCH .../image-status`) will fail and retry, then log an error and give up (best-effort, non-fatal; the document just stays `INDEXED_TEXT_ONLY`). See [Async Image Processing](#async-image-processing).
+> ⚠️ `SPRING_BOOT_CALLBACK_URL`/`USERNAME`/`PASSWORD` must match exactly what Spring Boot expects (`app.rag.callback.username`/`password` — see [Running integrated with akadion](#running-integrated-with-akadion)). A mismatch gets a `401` on every attempt; after 3 retries the callback gives up (best-effort, non-fatal — the document just stays `INDEXED_TEXT_ONLY` even though the images were indexed correctly in Qdrant). See [Async Image Processing](#async-image-processing).
 
 ## Running the Project
 
@@ -101,29 +101,32 @@ docker-compose up --build
 
 > The embedder container/service is named **`embedder`** (not `embedder-service`) so that the Spring Boot backend can reach it at the hostname it expects by default (`http://embedder:8001` / `RAG_EMBEDDER_URL`).
 
-### Rulare integrată cu akadion
+### Running integrated with akadion
 
-`docker-compose.yml` atașează containerul `embedder` și la rețeaua Docker externă **`akadion_shared`**, ca să fie vizibil pentru backend-ul Spring Boot din repo-ul `akadion` (care rulează separat, cu propriul `compose.yaml`).
+`docker-compose.yml` also attaches the `embedder` container to the external Docker network **`akadion_shared`**, so it is reachable by the Spring Boot backend from the `akadion` repo (which runs separately, with its own `compose.yaml`).
 
-1. Rețeaua `akadion_shared` trebuie să existe înainte de `docker-compose up`. Launcherul din akadion (`Start Akadion.cmd`) o creează automat când pornești stack-ul akadion. Dacă pornești embedder-ul separat/primul, creaz-o manual:
+1. The `akadion_shared` network must exist before `docker-compose up`. The akadion launcher (`Start Akadion.cmd`) creates it automatically when you start the akadion stack. If you start the embedder separately/first, create it manually:
    ```powershell
    docker network create akadion_shared
    ```
-2. În `.env`, setează valorile ca să corespundă cu ce așteaptă `akadion/backend` (`application.properties` / `compose.yaml`):
+2. In `.env`, set the values to match what `akadion/backend` expects (`application.properties` / `compose.yaml`):
 
-   | Variabilă | Valoare pentru integrare cu akadion |
+   | Variable | Value for akadion integration |
    |---|---|
-   | `RAG_SERVICE_USERNAME` | aceeași valoare ca `app.rag.auth.username` din backend (implicit `akadion-spring-backend`) |
-   | `RAG_SERVICE_PASSWORD` | aceeași valoare ca `app.rag.auth.password` din backend (implicit `parola_spring_rag`) |
-   | `MINIO_ENDPOINT` | `akadion-minio:9000` (MinIO-ul real din stack-ul akadion, nu cel local) |
-   | `MINIO_BUCKET` | `course-documents` (bucket-ul real, creat de `minio-setup` din akadion) |
-   | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | aceleași ca `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` din `akadion/compose.yaml` (implicit `minioadmin` / `MinioParola123!`) |
+   | `RAG_SERVICE_USERNAME` | same value as `app.rag.auth.username` in the backend (default `akadion-spring-backend`) |
+   | `RAG_SERVICE_PASSWORD` | same value as `app.rag.auth.password` in the backend |
+   | `MINIO_ENDPOINT` | `akadion-minio:9000` (the real MinIO from the akadion stack, not the local one) |
+   | `MINIO_BUCKET` | `course-documents` (the real bucket, created by `minio-setup` in akadion) |
+   | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | the same as `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` in `akadion/compose.yaml` (default user `minioadmin`) |
+   | `SPRING_BOOT_CALLBACK_URL` | `http://backend:8081/api/rag/documents/image-status` (the `backend` hostname is reachable via the `akadion_shared` network) |
+   | `SPRING_BOOT_CALLBACK_USERNAME` | same value as `app.rag.callback.username` in the backend (default `akadion-embedder-callback`) |
+   | `SPRING_BOOT_CALLBACK_PASSWORD` | same value as `app.rag.callback.password` in the backend |
 
-   Dacă folosești `MINIO_ENDPOINT=akadion-minio:9000`, MinIO-ul local propriu (serviciul `minio` din acest `docker-compose.yml`) devine redundant — poți porni doar `embedder` și `qdrant`:
+   If you use `MINIO_ENDPOINT=akadion-minio:9000`, the local MinIO (the `minio` service in this `docker-compose.yml`) becomes redundant — you can start just `embedder` and `qdrant`:
    ```powershell
    docker-compose up --build embedder qdrant
    ```
-3. `SPRING_BOOT_CALLBACK_URL` rămâne fără efect real până când backend-ul akadion implementează endpoint-ul de primire (vezi avertismentul din secțiunea de variabile de mediu de mai sus).
+3. `SPRING_BOOT_CALLBACK_URL`/`USERNAME`/`PASSWORD` must match exactly what the akadion backend expects (`app.rag.callback.username`/`password`, table above) — otherwise the callback gets a `401` (see the warning in the environment variables section above).
 
 ## Authentication
 
@@ -284,7 +287,7 @@ Text ingestion (`POST /api/documents/ingest`) stays synchronous, but images embe
 3. If the professor re-indexes the same document before the background job finishes, `register_ingest_version`/`ingest_version` makes the stale job detect it's no longer current and discard its results quietly, instead of racing the newer ingest.
 4. On completion (success or failure), `springboot_callback.py` sends `PATCH {SPRING_BOOT_CALLBACK_URL}` with `{"document_id", "status": "INDEXED" | "FAILED_IMAGES", "images_indexed", "images_failed"}`, retrying up to 3 times.
 
-> ⚠️ **Not yet wired up end-to-end:** as of now, `akadion/backend` does not implement the endpoint that's supposed to receive this callback (no `PATCH .../image-status` route exists there yet — see `Embedder_Async_Images_Contract_SpringBoot.md` in the akadion repo root). Until the Spring Boot side adds it, the callback will 404, retry, and log an error — harmless (the document simply stays at `INDEXED_TEXT_ONLY` from Spring Boot's point of view), but images won't be reflected as "done" anywhere outside this service's own logs/Qdrant.
+> ⚠️ **Credentials must match:** `akadion/backend` does implement this endpoint (`RagCallbackController`, reads `app.rag.callback.username`/`password`), but if `SPRING_BOOT_CALLBACK_USERNAME`/`PASSWORD` here don't match exactly, the callback gets a `401`, retries, and gives up — harmless (the document simply stays at `INDEXED_TEXT_ONLY` from Spring Boot's point of view), but images won't be reflected as "done" anywhere outside this service's own logs/Qdrant.
 
 ## Logging
 
