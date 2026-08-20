@@ -18,4 +18,4 @@ COPY fastapi_app/ fastapi_app/
 
 EXPOSE 8001
 
-CMD ["uvicorn", "fastapi_app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["opentelemetry-instrument", "uvicorn", "fastapi_app.main:app", "--host", "0.0.0.0", "--port", "8001"]
