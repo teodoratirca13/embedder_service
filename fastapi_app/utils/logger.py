@@ -1,11 +1,14 @@
 import logging
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from opentelemetry import trace         # ← nou
 
+from fastapi_app.utils.config import get_settings
 from fastapi_app.utils.logging_ctx import request_id_var
+
+_VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
 _STD = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
     "message", "asctime", "taskName", "extra_data",
@@ -42,10 +45,20 @@ class JsonFormatter(logging.Formatter):
 
         return json.dumps(log_data, ensure_ascii=False, default=str)
 
-def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
-    """Create a logger with JSON formatting."""
+def setup_logger(name: str, level: Optional[str] = None) -> logging.Logger:
+    """Create a logger with JSON formatting.
+
+    Nivelul e dat explicit prin `level` daca e trecut, altfel vine din
+    LOG_LEVEL (.env / variabila de mediu, prin Settings.log_level) — inainte
+    `level` avea mereu valoarea implicita "INFO" cablata in semnatura, iar
+    niciun apelant nu o suprascria, deci LOG_LEVEL nu avea niciun efect.
+    """
+    resolved_level = (level or get_settings().log_level or "INFO").strip().upper()
+    if resolved_level not in _VALID_LEVELS:
+        resolved_level = "INFO"
+
     logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger.setLevel(resolved_level)
 
     logger.handlers = []
 
